@@ -1,0 +1,30 @@
+{
+  "business_profile": {
+    "business_name": "FlowMetrics",
+    "primary_goal": "qualify leads and book product demos",
+    "industry": "Workflow automation SaaS"
+  },
+
+  "customizable_messages": {
+    "phase_1_greeting": {
+      "default_text": "Hi! \ud83d\udc4b Thanks for reaching out to {business_name}. To point you in the right direction \u2014 what's your industry, and what's the biggest bottleneck your team is facing right now?",
+      "custom_text": null
+    },
+    "phase_2_value_drop": {
+      "default_text": "Got it \u2014 that sounds like a great fit for our solution. \ud83d\ude80",
+      "custom_text": null
+    },
+    "phase_3_cta": {
+      "default_text": "Would you like me to send over our direct booking link to schedule a brief 15-minute demo with an engineer this week? \ud83d\udcc5",
+      "custom_text": null
+    },
+    "human_handoff_message": {
+      "default_text": "Thanks for your patience \u2014 I'm connecting you with a member of our team who can help further. They'll be with you shortly!",
+      "custom_text": null
+    },
+    "out_of_scope_message": {
+      "default_text": "That's a bit outside what I can help with directly \u2014 but I'd love to get you to someone on our team who can. Want me to connect you?",
+      "custom_text": null
+    }
+  }
+}

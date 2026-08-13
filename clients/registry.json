@@ -1,0 +1,4 @@
+{
+  "_comment": "Maps each client's WhatsApp Business phone_number_id (from Meta) to their config folder name under /clients. Add one line per new client onboarded — no code changes needed.",
+  "REPLACE_WITH_FLOWMETRICS_PHONE_NUMBER_ID": "flowmetrics"
+}
