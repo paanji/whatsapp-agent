@@ -49,7 +49,7 @@ app.post('/webhook', async (req, res) => {
 
     await handleIncomingMessage({ clientId, phoneNumberId, userPhone, userText });
   } catch (err) {
-    console.error('Error handling webhook:', err);
+    console.error('Error handling webhook:', err.response?.data ? JSON.stringify(err.response.data) : err.message);
   }
 });
 
