@@ -41,6 +41,7 @@ function buildPromptForClient(clientId) {
   const systemPrompt = buildSystemPrompt({
     businessName: business_profile.business_name,
     primaryGoal: business_profile.primary_goal,
+    roleAndWorkflowBlock: business_profile.role_and_workflow,
     customMessagesBlock,
     knowledgeBaseBlock,
   });
