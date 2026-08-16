@@ -14,6 +14,23 @@ app.use(express.json());
 
 const registry = JSON.parse(fs.readFileSync(path.join(__dirname, 'clients', 'registry.json'), 'utf8'));
 
+// ---- Message deduplication ----
+// Meta retries webhook delivery if our server doesn't respond fast enough (e.g. waking
+// from a free-tier "sleep"). Without this, the same customer message gets processed
+// twice, causing two AI replies to be sent. We track recently-seen message IDs and
+// skip duplicates. Keeps the last 500 IDs to avoid unbounded memory growth.
+const processedMessageIds = new Set();
+function isDuplicate(messageId) {
+  if (!messageId) return false;
+  if (processedMessageIds.has(messageId)) return true;
+  processedMessageIds.add(messageId);
+  if (processedMessageIds.size > 500) {
+    const oldest = processedMessageIds.values().next().value;
+    processedMessageIds.delete(oldest);
+  }
+  return false;
+}
+
 // ---- 1. Webhook verification (Meta requires this GET handshake once, on setup) ----
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
@@ -36,6 +53,11 @@ app.post('/webhook', async (req, res) => {
     const change = entry?.changes?.[0]?.value;
     const message = change?.messages?.[0];
     if (!message) return; // e.g. a status update webhook, not a real message
+
+    if (isDuplicate(message.id)) {
+      console.log(`Skipping duplicate message: ${message.id}`);
+      return;
+    }
 
     const phoneNumberId = change.metadata.phone_number_id; // tells us WHICH client this is
     const userPhone = message.from;
