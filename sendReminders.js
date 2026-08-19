@@ -52,8 +52,8 @@ async function sendTemplateMessage(toNumber, customerName, service) {
           {
             type: 'body',
             parameters: [
-              { type: 'text', text: customerName || 'there' },
-              { type: 'text', text: service || 'your service' },
+              { type: 'text', parameter_name: 'customer_name', text: customerName || 'there' },
+              { type: 'text', parameter_name: 'service', text: service || 'HairCut/Shave/D-Tan/Facial' },
             ],
           },
         ],
