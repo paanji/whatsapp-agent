@@ -1,53 +1,44 @@
 // sendReminders.js
-// Usage: node sendReminders.js clients/Tomboys/customers.csv
+// Sends personalized reminders to all of a client's customers, pulling the
+// customer list from the database (not a local file) so this can run fully
+// unattended on a schedule (e.g. Render Cron Jobs).
 //
-// Reads a CSV of customers (name,phone,service), sends each one a
-// personalized reminder via the WhatsApp Cloud API using an approved
-// message template, and logs every send (success or failure) to the
-// database for tracking + 90-day auto-retention.
+// Usage: node sendReminders.js <client-id>
+// Example: node sendReminders.js Tomboys
 
 require('dotenv').config();
-const fs = require('fs');
-const path = require('path');
 const axios = require('axios');
 const { ensureTable, pruneOldRecords, logReminder, getLastReminder } = require('./reminderLog');
+const { ensureCustomersTable, getCustomersForClient } = require('./customerStore');
 
-const CLIENT_ID = 'Tomboys';
-const PHONE_NUMBER_ID = '1274893635709517'; // TomBoys' registered production number
-const TEMPLATE_NAME = 'tomboys_appointment_reminder'; // must match the approved template name exactly
-const TEMPLATE_LANGUAGE = 'en';
+// Per-client settings. Add a new entry here when onboarding a new client's reminders.
+const CLIENT_SETTINGS = {
+  Tomboys: {
+    phoneNumberId: '1274893635709517',
+    templateName: 'tomboys_appointment_reminder',
+    templateLanguage: 'en',
+  },
+};
+
 const MIN_DAYS_BETWEEN_REMINDERS = 21; // don't re-remind the same customer within this many days
 
-function parseCSV(filePath) {
-  const content = fs.readFileSync(filePath, 'utf8').trim();
-  const [headerLine, ...lines] = content.split('\n');
-  const headers = headerLine.split(',').map(h => h.trim());
-  return lines.map(line => {
-    const values = line.split(',').map(v => v.trim());
-    const row = {};
-    headers.forEach((h, i) => (row[h] = values[i] || ''));
-    return row;
-  });
-}
-
 function toWhatsAppNumber(rawPhone) {
-  // Expects 10-digit Indian numbers; adds country code 91.
   const digits = rawPhone.replace(/\D/g, '');
   if (digits.length === 10) return `91${digits}`;
   if (digits.length === 12 && digits.startsWith('91')) return digits;
-  return null; // invalid — will be skipped and logged as failed
+  return null;
 }
 
-async function sendTemplateMessage(toNumber, customerName, service) {
+async function sendTemplateMessage(phoneNumberId, templateName, templateLanguage, toNumber, customerName) {
   const response = await axios.post(
-    `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`,
+    `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
     {
       messaging_product: 'whatsapp',
       to: toNumber,
       type: 'template',
       template: {
-        name: TEMPLATE_NAME,
-        language: { code: TEMPLATE_LANGUAGE },
+        name: templateName,
+        language: { code: templateLanguage },
         components: [
           {
             type: 'body',
@@ -69,17 +60,21 @@ async function sendTemplateMessage(toNumber, customerName, service) {
 }
 
 async function main() {
-  const csvPath = process.argv[2];
-  if (!csvPath) {
-    console.error('Usage: node sendReminders.js <path-to-customers.csv>');
+  const clientId = process.argv[2];
+  if (!clientId || !CLIENT_SETTINGS[clientId]) {
+    console.error('Usage: node sendReminders.js <client-id>');
+    console.error(`Known clients: ${Object.keys(CLIENT_SETTINGS).join(', ')}`);
     process.exit(1);
   }
 
+  const { phoneNumberId, templateName, templateLanguage } = CLIENT_SETTINGS[clientId];
+
   await ensureTable();
+  await ensureCustomersTable();
   await pruneOldRecords();
 
-  const customers = parseCSV(path.resolve(csvPath));
-  console.log(`Loaded ${customers.length} customers from ${csvPath}`);
+  const customers = await getCustomersForClient(clientId);
+  console.log(`Loaded ${customers.length} customers for "${clientId}" from the database.`);
 
   let sent = 0, skipped = 0, failed = 0;
 
@@ -93,8 +88,7 @@ async function main() {
       continue;
     }
 
-    // Avoid re-reminding someone too soon
-    const last = await getLastReminder(CLIENT_ID, toNumber);
+    const last = await getLastReminder(clientId, toNumber);
     if (last) {
       const daysSince = (Date.now() - new Date(last.sent_at)) / (1000 * 60 * 60 * 24);
       if (daysSince < MIN_DAYS_BETWEEN_REMINDERS) {
@@ -107,9 +101,9 @@ async function main() {
     const messageSummary = `Reminder template sent — service: ${service || '(not set)'}`;
 
     try {
-      await sendTemplateMessage(toNumber, name, service);
+      await sendTemplateMessage(phoneNumberId, templateName, templateLanguage, toNumber, name);
       await logReminder({
-        clientId: CLIENT_ID,
+        clientId,
         customerName: name,
         customerPhone: toNumber,
         messageContent: messageSummary,
@@ -120,7 +114,7 @@ async function main() {
     } catch (err) {
       const errorDetail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
       await logReminder({
-        clientId: CLIENT_ID,
+        clientId,
         customerName: name,
         customerPhone: toNumber,
         messageContent: messageSummary,
@@ -131,7 +125,6 @@ async function main() {
       failed++;
     }
 
-    // Small delay between sends to avoid hitting rate limits
     await new Promise(resolve => setTimeout(resolve, 500));
   }
 
