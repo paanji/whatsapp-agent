@@ -61,8 +61,10 @@ async function sendTemplateMessage(phoneNumberId, templateName, templateLanguage
 
 async function main() {
   const clientId = process.argv[2];
+  const testPhoneOnly = process.argv[3]; // optional: if provided, ONLY send to this number (for safe testing)
+
   if (!clientId || !CLIENT_SETTINGS[clientId]) {
-    console.error('Usage: node sendReminders.js <client-id>');
+    console.error('Usage: node sendReminders.js <client-id> [test-phone-number]');
     console.error(`Known clients: ${Object.keys(CLIENT_SETTINGS).join(', ')}`);
     process.exit(1);
   }
@@ -73,8 +75,15 @@ async function main() {
   await ensureCustomersTable();
   await pruneOldRecords();
 
-  const customers = await getCustomersForClient(clientId);
-  console.log(`Loaded ${customers.length} customers for "${clientId}" from the database.`);
+  let customers = await getCustomersForClient(clientId);
+
+  if (testPhoneOnly) {
+    const testDigits = testPhoneOnly.replace(/\D/g, '').slice(-10); // last 10 digits
+    customers = customers.filter(c => c.phone.replace(/\D/g, '').endsWith(testDigits));
+    console.log(`TEST MODE: only sending to number ending in ${testDigits} (${customers.length} match found in customers table)`);
+  }
+
+  console.log(`Loaded ${customers.length} customers for "${clientId}" ${testPhoneOnly ? '(test mode)' : 'from the database'}.`);
 
   let sent = 0, skipped = 0, failed = 0;
 
